@@ -1,0 +1,43 @@
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Tailwind'in temel stillerini ve font ailesini ayarlıyoruz */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+}
+
+/* Aurora Arka Plan Efekti */
+body::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+        radial-gradient(circle at 15% 25%, rgba(14, 165, 233, 0.25), transparent 40%),
+        radial-gradient(circle at 85% 75%, rgba(107, 33, 168, 0.2), transparent 40%); /* Fuchsia yerine Purple */
+    filter: blur(120px);
+    z-index: 0;
+    pointer-events: none;
+    animation: aurora-flow 30s infinite alternate;
+}
+
+@keyframes aurora-flow {
+    from { transform: rotate(-20deg) scale(1.2); }
+    to { transform: rotate(20deg) scale(1.5); }
+}
+
+/* Özel Kaydırma Çubuğu Stilleri */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5); /* slate-600 */
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.5); /* slate-500 */
+}
