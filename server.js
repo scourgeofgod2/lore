@@ -55,24 +55,42 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
         const timestampedTranscript = transcribeResult.response.text();
         console.log('Deşifre tamamlandı.');
 
-        console.log('Adım 2: Metin analiz ediliyor...');
+        console.log('Adım 2: Metin analiz ediliyor (Bol Kepçe Modu)...');
         const systemInstruction = `
-            You are "The Loremistress's Editing Assistant." This is a crucial instruction: First, analyze the FULL DURATION of the provided audio transcript. You must ensure your timestamps cover the ENTIRE audio duration from [00:00] to the very last second. DO NOT stop before the audio ends - your last timestamp must match the total audio length. Analyze the provided transcript with [mm:ss] timestamps. Your task is to identify ALL potential visual moments, even minor ones, and create a JSON array. Each object must contain: - "timestamp" (a string formatted as "[mm:ss-mm:ss]") - "scene_description" (a brief, 1-2 sentence summary). Important rules: 1. The first timestamp MUST start at [00:00]. 2. The last timestamp MUST extend to the final second of the audio. 3. Do not leave any gaps between timestamps. 4. Each timestamp should logically connect to the next one. Your entire response MUST be a raw JSON array. Do NOT use markdown.
+            You are "The Loremistress's Editing Assistant."
+            This is a crucial instruction: First, analyze the FULL DURATION of the provided audio transcript.
+            You must ensure your timestamps cover the ENTIRE audio duration from [00:00] to the very last second.
+            DO NOT stop before the audio ends - your last timestamp must match the total audio length.
+
+            Analyze the provided transcript with [mm:ss] timestamps.
+            Your task is to identify ALL potential visual moments, even minor ones, and create a JSON array.
+            Each object must contain:
+            - "timestamp" (a string formatted as "[mm:ss-mm:ss]")
+            - "scene_description" (a brief, 1-2 sentence summary)
+
+            Important rules:
+            1. The first timestamp MUST start at [00:00]
+            2. The last timestamp MUST extend to the final second of the audio
+            3. Do not leave any gaps between timestamps
+            4. Each timestamp should logically connect to the next one
+
+            Your entire response MUST be a raw JSON array. Do NOT use markdown.
         `;
         const analysisResult = await textModel.generateContent({ contents: [{ role: "user", parts: [{ text: systemInstruction }, { text: timestampedTranscript }] }] });
         let responseText = analysisResult.response.text();
         if (responseText.startsWith("```json")) responseText = responseText.substring(7, responseText.length - 3).trim();
         const rawShots = JSON.parse(responseText);
         console.log(`API Analizi ${rawShots.length} ham sahne üretti.`);
-        
+
+        // ----- ADIM 3: CERRAH OPERASYONU - SAHNELERİ BİRLEŞTİRME VE ELEME -----
         console.log('Adım 3: Sahne sayısı hedefe göre ayarlanıyor...');
+
+        // Toplam süreyi son timestamp'ten al
         const lastShot = rawShots[rawShots.length - 1];
-        
-        // HATA 1 BURADAYDI VE DÜZELTİLDİ: .split('-') bir dizi döndürür, önce elemanı seçmek gerekir.
-const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
-        
+        const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
         const [minutes, seconds] = lastTimestamp.split(':').map(Number);
         const totalDurationInSeconds = minutes * 60 + seconds;
+        
         const targetShotCount = Math.floor((totalDurationInSeconds / 60) * 2.5);
         console.log(`Hedef sahne sayısı: ${targetShotCount}`);
 
@@ -80,12 +98,19 @@ const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
             const [startStr, endStr] = shot.timestamp.replace(/[\[\]]/g, '').split('-');
             const [sm, ss] = startStr.split(':').map(Number);
             const [em, es] = endStr.split(':').map(Number);
-            return { ...shot, start: sm * 60 + ss, end: em * 60 + es, duration: (em * 60 + es) - (sm * 60 + ss) };
+            return {
+                ...shot,
+                start: sm * 60 + ss,
+                end: em * 60 + es,
+                duration: (em * 60 + es) - (sm * 60 + ss)
+            };
         });
 
+        // Sahne sayısı hedeften fazlaysa, en kısa olanları birleştirerek azalt
         while (mergedShots.length > targetShotCount && mergedShots.length > 1) {
             let shortestDuration = Infinity;
             let shortestIndex = -1;
+
             for (let i = 0; i < mergedShots.length; i++) {
                 if (mergedShots[i].duration < shortestDuration) {
                     shortestDuration = mergedShots[i].duration;
@@ -93,21 +118,25 @@ const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
                 }
             }
 
-            // HATA 2 BURADAYDI VE DÜZELTİLDİ: Senin orijinal, doğru kodun geri konuldu.
-            if (shortestIndex === 0) {
-                mergedShots.start = mergedShots.start;
-                mergedShots.scene_description = mergedShots.scene_description + " " + mergedShots.scene_description;
+            if (shortestIndex === 0) { // Eğer en kısa olan ilk sahneyse, sonrakiyle birleştir
+                mergedShots[1].start = mergedShots[0].start;
+                mergedShots[1].scene_description = mergedShots[0].scene_description + " " + mergedShots[1].scene_description;
                 mergedShots.splice(0, 1);
-            } else {
+            } else { // Değilse, bir öncekiyle birleştir
                 mergedShots[shortestIndex - 1].end = mergedShots[shortestIndex].end;
                 mergedShots[shortestIndex - 1].scene_description += " " + mergedShots[shortestIndex].scene_description;
                 mergedShots.splice(shortestIndex, 1);
             }
             
-            mergedShots = mergedShots.map(shot => {
+            // Süreleri ve timestamp'leri yeniden hesapla
+             mergedShots = mergedShots.map(shot => {
                 const newDuration = shot.end - shot.start;
                 const formatTime = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-                return { ...shot, duration: newDuration, timestamp: `[${formatTime(shot.start)}-${formatTime(shot.end)}]` };
+                return {
+                    ...shot,
+                    duration: newDuration,
+                    timestamp: `[${formatTime(shot.start)}-${formatTime(shot.end)}]`
+                };
             });
         }
 
@@ -121,6 +150,7 @@ const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
 });
 
 app.post('/generate-image', async (req, res) => {
+    // timestamp'i de frontend'den alıyoruz
     const { prompt, index, projectName, timestamp } = req.body; 
     if (!prompt || index === undefined || !projectName || !timestamp) {
         return res.status(400).json({ error: 'Prompt, index, proje adı ve timestamp gerekli.' });
@@ -129,17 +159,36 @@ app.post('/generate-image', async (req, res) => {
     console.log(`'${projectName}' projesi için görsel üretiliyor (Sıra: ${fileNumber}, Zaman: ${timestamp})...`);
 
     const apiRequestBody = [{
-        taskType: "imageInference", model: "rundiffusion:110@101", numberResults: 1,
-        outputFormat: "JPEG", width: 1344, height: 768, steps: 4, CFGScale: 1,
-        scheduler: "Euler Beta", includeCost: true, checkNSFW: true, outputType: ["URL"],
-        lora: [{ model: "civitai:671064@751244", weight: 1 }],
-        outputQuality: 85, positivePrompt: prompt, taskUUID: uuidv4()
+        taskType: "imageInference",
+        model: "rundiffusion:110@101",
+        numberResults: 1,
+        outputFormat: "JPEG",
+        width: 1344,
+        height: 768,
+        steps: 4,
+        CFGScale: 1,
+        scheduler: "Euler Beta",
+        includeCost: true,
+        checkNSFW: true,
+        outputType: ["URL"],
+        lora: [
+            {
+                model: "civitai:671064@751244",
+                weight: 1
+            }
+        ],
+        outputQuality: 85,
+        positivePrompt: prompt,
+        taskUUID: uuidv4()
     }];
 
     try {
         const apiResponse = await fetch('https://api.runware.ai/v1', {
             method: 'POST',
-            headers: { "Authorization": `Bearer ${process.env.RUNWARE_API_KEY}`, "Content-Type": "application/json" },
+            headers: {
+                "Authorization": `Bearer ${process.env.RUNWARE_API_KEY}`,
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify(apiRequestBody)
         });
 
@@ -149,7 +198,8 @@ app.post('/generate-image', async (req, res) => {
         }
 
         const responseData = await apiResponse.json();
-        const imageUrl = responseData.data.imageURL;
+        const imageUrl = responseData.data[0].imageURL;
+
         if (!imageUrl) throw new Error("Runware API cevabında 'imageURL' alanı bulunamadı.");
         console.log('Görsel başarıyla üretildi. URL:', imageUrl);
 
@@ -157,11 +207,15 @@ app.post('/generate-image', async (req, res) => {
         const imageResponse = await axios({ method: 'get', url: imageUrl, responseType: 'stream' });
         
         const projectDir = path.join(mainDownloadsDir, sanitizeFilename(projectName));
-        if (!fs.existsSync(projectDir)){ fs.mkdirSync(projectDir, { recursive: true }); }
+        if (!fs.existsSync(projectDir)){
+            fs.mkdirSync(projectDir, { recursive: true });
+        }
         
-        const safeTimestamp = timestamp.replace(/[\[\]:]/g, '').replace('-', '_');
-        const fileName = `${fileNumber}-[${safeTimestamp}].jpg`;
+        
+       const safeTimestamp = timestamp.replace(/[\[\]:]/g, '').replace('-', '_'); // Çıktı: 0015_0017
+        const fileName = `${fileNumber}-[${safeTimestamp}].jpg`; // Çıktı: 3-[0015_0017].jpg
         const localPath = path.join(projectDir, fileName);
+        // ++++++++++++++++++++++++++++++++++++++++++++++
         
         const writer = fs.createWriteStream(localPath);
         imageResponse.data.pipe(writer);
@@ -171,6 +225,7 @@ app.post('/generate-image', async (req, res) => {
             writer.on('error', reject);
         });
         console.log(`Görsel başarıyla kaydedildi: ${localPath}`);
+
         res.json({ imageUrl: imageUrl, localFile: fileName });
 
     } catch (error) {
@@ -187,14 +242,14 @@ app.post('/create-video', (req, res) => {
     const projectDir = path.join(mainDownloadsDir, sanitizeFilename(projectName));
     const audioFilePath = path.join(projectDir, audioFileName);
     const outputVideoPath = path.join(projectDir, `${sanitizeFilename(projectName)}.mp4`);
-    const filterFilePath = path.join(projectDir, 'filters.txt');
+    const filterFilePath = path.join(projectDir, 'filters.txt'); // Temporary file for the filter command
 
     try {
         const imageFiles = fs.readdirSync(projectDir).filter(f => f.endsWith('.jpg')).sort((a, b) => parseInt(a) - parseInt(b));
         if (imageFiles.length === 0) return res.status(400).json({ error: "Klasörde işlenecek görsel bulunamadı." });
 
         let inputs = `-i "${audioFilePath}" `;
-        let filter_complex_content = "";
+        let filter_complex_content = ""; // Content for the filters.txt file
         let finalConcatStreams = "";
 
         imageFiles.forEach((file, index) => {
@@ -204,7 +259,7 @@ app.post('/create-video', (req, res) => {
             const timeMatch = file.match(/\[(\d{4}_\d{4})\]/);
             if (!timeMatch) return;
 
-            const [startStr, endStr] = timeMatch.split('_');
+            const [startStr, endStr] = timeMatch[1].split('_');
             const start = parseInt(startStr.substring(0, 2)) * 60 + parseInt(startStr.substring(2, 4));
             const end = parseInt(endStr.substring(0, 2)) * 60 + parseInt(endStr.substring(2, 4));
             const duration = end - start;
@@ -217,20 +272,24 @@ app.post('/create-video', (req, res) => {
                 `eq=contrast=1.05:brightness=-0.02:saturation=0.95,` +
                 `vignette=angle=PI/5,` +
                 `fade=t=in:st=0:d=1,fade=t=out:st=${duration - 1}:d=1,` +
-                `trim=duration=${duration}[stream${index}];\n`;
+                `trim=duration=${duration}[stream${index}];\n`; // Use newline instead of semicolon for file
             
             finalConcatStreams += `[stream${index}]`;
         });
         
         filter_complex_content += `${finalConcatStreams}concat=n=${imageFiles.length}:v=1:a=0[vid]`;
+
+        // Write the complex filter string to the temporary file
         fs.writeFileSync(filterFilePath, filter_complex_content);
         console.log('FFmpeg filtre dosyası oluşturuldu.');
 
+        // The command now references the filter file, making it much shorter
         const ffmpegCommand = `ffmpeg -y ${inputs} -filter_complex_script "${filterFilePath}" -map "[vid]" -map 0:a -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -shortest "${outputVideoPath}"`;
+
         console.log("FFmpeg komutu (dosya ile) çalıştırılıyor...");
-        
         exec(ffmpegCommand, (error, stdout, stderr) => {
-            fs.unlinkSync(filterFilePath);
+            fs.unlinkSync(filterFilePath); // Clean up the temporary file
+
             if (error) {
                 console.error(`FFmpeg hatası: ${error.message}`);
                 console.error("FFmpeg Stderr:", stderr);
@@ -245,7 +304,6 @@ app.post('/create-video', (req, res) => {
         res.status(500).json({ error: "Video oluşturma sırasında bir hata oluştu: " + error.message });
     }
 });
-
 app.listen(port, () => {
     console.log(`Loremistress Kurgu Asistanı sunucusu ${port} portunda çalışıyor.`);
 });
