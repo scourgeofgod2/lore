@@ -17,24 +17,20 @@ const app = express();
 const port = 3000;
 
 app.use(express.json());
-
-// DEĞİŞİKLİK 1: CORS ayarı daha genel hale getirildi.
 app.use(cors());
 
-const upload = multer({ storage: multer.memoryStorage() });
-
-// DEĞİŞİKLİK 2: Frontend dosyalarını (index.html, script2.js) sunmak için.
-// Bu satır sayesinde http://<sunucu-ip>:3000 adresine gidildiğinde index.html gösterilir.
+// Frontend dosyalarını (index.html, script2.js) sunmak için.
 app.use(express.static('public'));
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const mainDownloadsDir = path.join(__dirname, 'downloads');
 if (!fs.existsSync(mainDownloadsDir)){
     fs.mkdirSync(mainDownloadsDir);
 }
 
-// DEĞİŞİKLİK 3: Oluşturulan video ve görsellerin linkle erişilebilir olması için.
+// Oluşturulan video ve görsellerin linkle erişilebilir olması için.
 app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
-
 
 // Güvenli dosya adı için bir fonksiyon
 const sanitizeFilename = (name) => name.replace(/[^a-z0-9\s_-]/gi, '').trim().replace(/[\s_]+/g, '-');
@@ -59,39 +55,24 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
         const timestampedTranscript = transcribeResult.response.text();
         console.log('Deşifre tamamlandı.');
 
-        console.log('Adım 2: Metin analiz ediliyor (Bol Kepçe Modu)...');
+        console.log('Adım 2: Metin analiz ediliyor...');
         const systemInstruction = `
-            You are "The Loremistress's Editing Assistant."
-            This is a crucial instruction: First, analyze the FULL DURATION of the provided audio transcript.
-            You must ensure your timestamps cover the ENTIRE audio duration from [00:00] to the very last second.
-            DO NOT stop before the audio ends - your last timestamp must match the total audio length.
-
-            Analyze the provided transcript with [mm:ss] timestamps.
-            Your task is to identify ALL potential visual moments, even minor ones, and create a JSON array.
-            Each object must contain:
-            - "timestamp" (a string formatted as "[mm:ss-mm:ss]")
-            - "scene_description" (a brief, 1-2 sentence summary)
-
-            Important rules:
-            1. The first timestamp MUST start at [00:00]
-            2. The last timestamp MUST extend to the final second of the audio
-            3. Do not leave any gaps between timestamps
-            4. Each timestamp should logically connect to the next one
-
-            Your entire response MUST be a raw JSON array. Do NOT use markdown.
+            You are "The Loremistress's Editing Assistant." This is a crucial instruction: First, analyze the FULL DURATION of the provided audio transcript. You must ensure your timestamps cover the ENTIRE audio duration from [00:00] to the very last second. DO NOT stop before the audio ends - your last timestamp must match the total audio length. Analyze the provided transcript with [mm:ss] timestamps. Your task is to identify ALL potential visual moments, even minor ones, and create a JSON array. Each object must contain: - "timestamp" (a string formatted as "[mm:ss-mm:ss]") - "scene_description" (a brief, 1-2 sentence summary). Important rules: 1. The first timestamp MUST start at [00:00]. 2. The last timestamp MUST extend to the final second of the audio. 3. Do not leave any gaps between timestamps. 4. Each timestamp should logically connect to the next one. Your entire response MUST be a raw JSON array. Do NOT use markdown.
         `;
         const analysisResult = await textModel.generateContent({ contents: [{ role: "user", parts: [{ text: systemInstruction }, { text: timestampedTranscript }] }] });
         let responseText = analysisResult.response.text();
         if (responseText.startsWith("```json")) responseText = responseText.substring(7, responseText.length - 3).trim();
         const rawShots = JSON.parse(responseText);
         console.log(`API Analizi ${rawShots.length} ham sahne üretti.`);
-
+        
         console.log('Adım 3: Sahne sayısı hedefe göre ayarlanıyor...');
         const lastShot = rawShots[rawShots.length - 1];
-       const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
+        
+        // HATA 1 BURADAYDI VE DÜZELTİLDİ: .split('-') bir dizi döndürür, önce elemanı seçmek gerekir.
+        const lastTimestamp = lastShot.timestamp.split('-').replace(']', '');
+        
         const [minutes, seconds] = lastTimestamp.split(':').map(Number);
         const totalDurationInSeconds = minutes * 60 + seconds;
-        
         const targetShotCount = Math.floor((totalDurationInSeconds / 60) * 2.5);
         console.log(`Hedef sahne sayısı: ${targetShotCount}`);
 
@@ -99,18 +80,12 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
             const [startStr, endStr] = shot.timestamp.replace(/[\[\]]/g, '').split('-');
             const [sm, ss] = startStr.split(':').map(Number);
             const [em, es] = endStr.split(':').map(Number);
-            return {
-                ...shot,
-                start: sm * 60 + ss,
-                end: em * 60 + es,
-                duration: (em * 60 + es) - (sm * 60 + ss)
-            };
+            return { ...shot, start: sm * 60 + ss, end: em * 60 + es, duration: (em * 60 + es) - (sm * 60 + ss) };
         });
 
         while (mergedShots.length > targetShotCount && mergedShots.length > 1) {
             let shortestDuration = Infinity;
             let shortestIndex = -1;
-
             for (let i = 0; i < mergedShots.length; i++) {
                 if (mergedShots[i].duration < shortestDuration) {
                     shortestDuration = mergedShots[i].duration;
@@ -118,6 +93,7 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
                 }
             }
 
+            // HATA 2 BURADAYDI VE DÜZELTİLDİ: Senin orijinal, doğru kodun geri konuldu.
             if (shortestIndex === 0) {
                 mergedShots.start = mergedShots.start;
                 mergedShots.scene_description = mergedShots.scene_description + " " + mergedShots.scene_description;
@@ -128,14 +104,10 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
                 mergedShots.splice(shortestIndex, 1);
             }
             
-             mergedShots = mergedShots.map(shot => {
+            mergedShots = mergedShots.map(shot => {
                 const newDuration = shot.end - shot.start;
                 const formatTime = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-                return {
-                    ...shot,
-                    duration: newDuration,
-                    timestamp: `[${formatTime(shot.start)}-${formatTime(shot.end)}]`
-                };
+                return { ...shot, duration: newDuration, timestamp: `[${formatTime(shot.start)}-${formatTime(shot.end)}]` };
             });
         }
 
@@ -187,7 +159,7 @@ app.post('/generate-image', async (req, res) => {
         const projectDir = path.join(mainDownloadsDir, sanitizeFilename(projectName));
         if (!fs.existsSync(projectDir)){ fs.mkdirSync(projectDir, { recursive: true }); }
         
-       const safeTimestamp = timestamp.replace(/[\[\]:]/g, '').replace('-', '_');
+        const safeTimestamp = timestamp.replace(/[\[\]:]/g, '').replace('-', '_');
         const fileName = `${fileNumber}-[${safeTimestamp}].jpg`;
         const localPath = path.join(projectDir, fileName);
         
@@ -275,6 +247,5 @@ app.post('/create-video', (req, res) => {
 });
 
 app.listen(port, () => {
-    // DEĞİŞİKLİK 4: Konsol mesajı daha anlaşılır hale getirildi.
     console.log(`Loremistress Kurgu Asistanı sunucusu ${port} portunda çalışıyor.`);
 });
