@@ -84,7 +84,7 @@ function loremistressApp() {
                 const styleSignature = " in the style of a dark, gritty graphic novel, with heavy inks and high contrast.";
                 const finalPrompt = "Epic grimdark digital painting, " + shot.scene_description + styleSignature;
                 
-                const response = await fetch('http://localhost:3000/generate-image', {
+const response = await fetch('http://129.154.239.84:3000/process-audio', { ... });
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
