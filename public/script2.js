@@ -13,10 +13,6 @@ function loremistressApp() {
         shots: [],
         error: '',
 
-        // --- DEĞİŞMEZLER ---
-        // Sunucu adresini tek bir yerden yönetmek en iyisidir
-        serverUrl: 'http://129.154.239.84:3000',
-
         // --- METHODS (Fonksiyonlar) ---
 
         handleFileSelect(file) {
@@ -38,7 +34,7 @@ function loremistressApp() {
             this.isDragging = false;
             const files = event.dataTransfer.files;
             if (files.length > 0) {
-                this.handleFileSelect(files[0]);
+                this.handleFileSelect(files);
             }
         },
 
@@ -58,8 +54,8 @@ function loremistressApp() {
             formData.append('projectName', this.projectName.trim());
 
             try {
-                // DÜZELTİLDİ: Sunucu IP'si kullanılıyor
-                const response = await fetch(`${this.serverUrl}/process-audio`, {
+                // DEĞİŞİKLİK: Göreceli yol kullanıldı
+                const response = await fetch('/process-audio', {
                     method: 'POST',
                     body: formData,
                 });
@@ -89,8 +85,8 @@ function loremistressApp() {
                 const styleSignature = " in the style of a dark, gritty graphic novel, with heavy inks and high contrast.";
                 const finalPrompt = "Epic grimdark digital painting, " + shot.scene_description + styleSignature;
                 
-                // DÜZELTİLDİ: fetch komutu tamamen düzeltildi
-                const response = await fetch(`${this.serverUrl}/generate-image`, {
+                // DEĞİŞİKLİK: Göreceli yol kullanıldı
+                const response = await fetch('/generate-image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -126,8 +122,8 @@ function loremistressApp() {
 
             try {
                 const originalExtension = this.selectedFile.name.substring(this.selectedFile.name.lastIndexOf('.'));
-                // DÜZELTİLDİ: Sunucu IP'si kullanılıyor
-                const response = await fetch(`${this.serverUrl}/create-video`, {
+                // DEĞİŞİKLİK: Göreceli yol kullanıldı
+                const response = await fetch('/create-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -142,11 +138,11 @@ function loremistressApp() {
                 }
 
                 const data = await response.json();
-                alert('Video başarıyla oluşturuldu! Sunucudaki downloads klasörünü kontrol edin.');
+                alert('Video başarıyla oluşturuldu!');
                 
                 const safeProjectName = this.projectName.trim().replace(/[^a-z0-9\s_-]/gi, '').trim().replace(/[\s_]+/g, '-');
-                // DÜZELTİLDİ: Video linki sunucu IP'sini içeriyor
-                this.videoLink = `${this.serverUrl}/downloads/${safeProjectName}/${data.videoFile}`;
+                // DEĞİŞİKLİK: Göreceli yol kullanıldı
+                this.videoLink = `/downloads/${safeProjectName}/${data.videoFile}`;
 
             } catch (err) {
                 this.error = `Video oluşturma hatası: ${err.message}`;
