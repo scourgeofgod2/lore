@@ -15,27 +15,29 @@ const textModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 const app = express();
 const port = 3000;
+
 app.use(express.json());
-const corsOptions = { origin: 'http://127.0.0.1:5500' };
-app.use(cors(corsOptions));
+
+// DEĞİŞİKLİK 1: CORS ayarı daha genel hale getirildi.
+app.use(cors());
+
 const upload = multer({ storage: multer.memoryStorage() });
+
+// DEĞİŞİKLİK 2: Frontend dosyalarını (index.html, script2.js) sunmak için.
+// Bu satır sayesinde http://<sunucu-ip>:3000 adresine gidildiğinde index.html gösterilir.
+app.use(express.static('public'));
 
 const mainDownloadsDir = path.join(__dirname, 'downloads');
 if (!fs.existsSync(mainDownloadsDir)){
     fs.mkdirSync(mainDownloadsDir);
 }
 
-// +++ EKLENDİ: 'downloads' klasörünü dışarıya açarak video linklerinin çalışmasını sağlar. +++
+// DEĞİŞİKLİK 3: Oluşturulan video ve görsellerin linkle erişilebilir olması için.
 app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
 
 
 // Güvenli dosya adı için bir fonksiyon
 const sanitizeFilename = (name) => name.replace(/[^a-z0-9\s_-]/gi, '').trim().replace(/[\s_]+/g, '-');
-
-// --- Diğer tüm app.post(...) fonksiyonları AYNEN KALIYOR ---
-// ...
-// (Burada kodunun geri kalanı değişmeden devam ediyor)
-// ...
 
 app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
     const { projectName } = req.body;
@@ -84,10 +86,7 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
         const rawShots = JSON.parse(responseText);
         console.log(`API Analizi ${rawShots.length} ham sahne üretti.`);
 
-        // ----- ADIM 3: CERRAH OPERASYONU - SAHNELERİ BİRLEŞTİRME VE ELEME -----
         console.log('Adım 3: Sahne sayısı hedefe göre ayarlanıyor...');
-
-        // Toplam süreyi son timestamp'ten al
         const lastShot = rawShots[rawShots.length - 1];
         const lastTimestamp = lastShot.timestamp.split('-').replace(']', '');
         const [minutes, seconds] = lastTimestamp.split(':').map(Number);
@@ -108,7 +107,6 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
             };
         });
 
-        // Sahne sayısı hedeften fazlaysa, en kısa olanları birleştirerek azalt
         while (mergedShots.length > targetShotCount && mergedShots.length > 1) {
             let shortestDuration = Infinity;
             let shortestIndex = -1;
@@ -120,17 +118,16 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
                 }
             }
 
-            if (shortestIndex === 0) { // Eğer en kısa olan ilk sahneyse, sonrakiyle birleştir
+            if (shortestIndex === 0) {
                 mergedShots.start = mergedShots.start;
                 mergedShots.scene_description = mergedShots.scene_description + " " + mergedShots.scene_description;
                 mergedShots.splice(0, 1);
-            } else { // Değilse, bir öncekiyle birleştir
+            } else {
                 mergedShots[shortestIndex - 1].end = mergedShots[shortestIndex].end;
                 mergedShots[shortestIndex - 1].scene_description += " " + mergedShots[shortestIndex].scene_description;
                 mergedShots.splice(shortestIndex, 1);
             }
             
-            // Süreleri ve timestamp'leri yeniden hesapla
              mergedShots = mergedShots.map(shot => {
                 const newDuration = shot.end - shot.start;
                 const formatTime = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
@@ -152,7 +149,6 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
 });
 
 app.post('/generate-image', async (req, res) => {
-    // timestamp'i de frontend'den alıyoruz
     const { prompt, index, projectName, timestamp } = req.body; 
     if (!prompt || index === undefined || !projectName || !timestamp) {
         return res.status(400).json({ error: 'Prompt, index, proje adı ve timestamp gerekli.' });
@@ -161,36 +157,17 @@ app.post('/generate-image', async (req, res) => {
     console.log(`'${projectName}' projesi için görsel üretiliyor (Sıra: ${fileNumber}, Zaman: ${timestamp})...`);
 
     const apiRequestBody = [{
-        taskType: "imageInference",
-        model: "rundiffusion:110@101",
-        numberResults: 1,
-        outputFormat: "JPEG",
-        width: 1344,
-        height: 768,
-        steps: 4,
-        CFGScale: 1,
-        scheduler: "Euler Beta",
-        includeCost: true,
-        checkNSFW: true,
-        outputType: ["URL"],
-        lora: [
-            {
-                model: "civitai:671064@751244",
-                weight: 1
-            }
-        ],
-        outputQuality: 85,
-        positivePrompt: prompt,
-        taskUUID: uuidv4()
+        taskType: "imageInference", model: "rundiffusion:110@101", numberResults: 1,
+        outputFormat: "JPEG", width: 1344, height: 768, steps: 4, CFGScale: 1,
+        scheduler: "Euler Beta", includeCost: true, checkNSFW: true, outputType: ["URL"],
+        lora: [{ model: "civitai:671064@751244", weight: 1 }],
+        outputQuality: 85, positivePrompt: prompt, taskUUID: uuidv4()
     }];
 
     try {
         const apiResponse = await fetch('https://api.runware.ai/v1', {
             method: 'POST',
-            headers: {
-                "Authorization": `Bearer ${process.env.RUNWARE_API_KEY}`,
-                "Content-Type": "application/json"
-            },
+            headers: { "Authorization": `Bearer ${process.env.RUNWARE_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify(apiRequestBody)
         });
 
@@ -201,7 +178,6 @@ app.post('/generate-image', async (req, res) => {
 
         const responseData = await apiResponse.json();
         const imageUrl = responseData.data.imageURL;
-
         if (!imageUrl) throw new Error("Runware API cevabında 'imageURL' alanı bulunamadı.");
         console.log('Görsel başarıyla üretildi. URL:', imageUrl);
 
@@ -209,15 +185,11 @@ app.post('/generate-image', async (req, res) => {
         const imageResponse = await axios({ method: 'get', url: imageUrl, responseType: 'stream' });
         
         const projectDir = path.join(mainDownloadsDir, sanitizeFilename(projectName));
-        if (!fs.existsSync(projectDir)){
-            fs.mkdirSync(projectDir, { recursive: true });
-        }
+        if (!fs.existsSync(projectDir)){ fs.mkdirSync(projectDir, { recursive: true }); }
         
-        
-       const safeTimestamp = timestamp.replace(/[\[\]:]/g, '').replace('-', '_'); // Çıktı: 0015_0017
-        const fileName = `${fileNumber}-[${safeTimestamp}].jpg`; // Çıktı: 3-[0015_0017].jpg
+       const safeTimestamp = timestamp.replace(/[\[\]:]/g, '').replace('-', '_');
+        const fileName = `${fileNumber}-[${safeTimestamp}].jpg`;
         const localPath = path.join(projectDir, fileName);
-        // ++++++++++++++++++++++++++++++++++++++++++++++
         
         const writer = fs.createWriteStream(localPath);
         imageResponse.data.pipe(writer);
@@ -227,7 +199,6 @@ app.post('/generate-image', async (req, res) => {
             writer.on('error', reject);
         });
         console.log(`Görsel başarıyla kaydedildi: ${localPath}`);
-
         res.json({ imageUrl: imageUrl, localFile: fileName });
 
     } catch (error) {
@@ -244,14 +215,14 @@ app.post('/create-video', (req, res) => {
     const projectDir = path.join(mainDownloadsDir, sanitizeFilename(projectName));
     const audioFilePath = path.join(projectDir, audioFileName);
     const outputVideoPath = path.join(projectDir, `${sanitizeFilename(projectName)}.mp4`);
-    const filterFilePath = path.join(projectDir, 'filters.txt'); // Temporary file for the filter command
+    const filterFilePath = path.join(projectDir, 'filters.txt');
 
     try {
         const imageFiles = fs.readdirSync(projectDir).filter(f => f.endsWith('.jpg')).sort((a, b) => parseInt(a) - parseInt(b));
         if (imageFiles.length === 0) return res.status(400).json({ error: "Klasörde işlenecek görsel bulunamadı." });
 
         let inputs = `-i "${audioFilePath}" `;
-        let filter_complex_content = ""; // Content for the filters.txt file
+        let filter_complex_content = "";
         let finalConcatStreams = "";
 
         imageFiles.forEach((file, index) => {
@@ -274,24 +245,20 @@ app.post('/create-video', (req, res) => {
                 `eq=contrast=1.05:brightness=-0.02:saturation=0.95,` +
                 `vignette=angle=PI/5,` +
                 `fade=t=in:st=0:d=1,fade=t=out:st=${duration - 1}:d=1,` +
-                `trim=duration=${duration}[stream${index}];\n`; // Use newline instead of semicolon for file
+                `trim=duration=${duration}[stream${index}];\n`;
             
             finalConcatStreams += `[stream${index}]`;
         });
         
         filter_complex_content += `${finalConcatStreams}concat=n=${imageFiles.length}:v=1:a=0[vid]`;
-
-        // Write the complex filter string to the temporary file
         fs.writeFileSync(filterFilePath, filter_complex_content);
         console.log('FFmpeg filtre dosyası oluşturuldu.');
 
-        // The command now references the filter file, making it much shorter
         const ffmpegCommand = `ffmpeg -y ${inputs} -filter_complex_script "${filterFilePath}" -map "[vid]" -map 0:a -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -shortest "${outputVideoPath}"`;
-
         console.log("FFmpeg komutu (dosya ile) çalıştırılıyor...");
+        
         exec(ffmpegCommand, (error, stdout, stderr) => {
-            fs.unlinkSync(filterFilePath); // Clean up the temporary file
-
+            fs.unlinkSync(filterFilePath);
             if (error) {
                 console.error(`FFmpeg hatası: ${error.message}`);
                 console.error("FFmpeg Stderr:", stderr);
@@ -307,7 +274,7 @@ app.post('/create-video', (req, res) => {
     }
 });
 
-// --- DEĞİŞTİRİLDİ: Konsol mesajı daha anlaşılır hale getirildi. ---
 app.listen(port, () => {
+    // DEĞİŞİKLİK 4: Konsol mesajı daha anlaşılır hale getirildi.
     console.log(`Loremistress Kurgu Asistanı sunucusu ${port} portunda çalışıyor.`);
 });
