@@ -88,7 +88,7 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
 
         console.log('Adım 3: Sahne sayısı hedefe göre ayarlanıyor...');
         const lastShot = rawShots[rawShots.length - 1];
-        const lastTimestamp = lastShot.timestamp.split('-').replace(']', '');
+       const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
         const [minutes, seconds] = lastTimestamp.split(':').map(Number);
         const totalDurationInSeconds = minutes * 60 + seconds;
         
