@@ -7,11 +7,15 @@ function loremistressApp() {
         fileUrl: '',
         isDragging: false,
         isLoading: false,
-        isCreatingVideo: false, // For the "Create Video" button state
-        videoLink: '',      // To hold the link to the finished video
+        isCreatingVideo: false,
+        videoLink: '',
         transcript: '',
         shots: [],
         error: '',
+
+        // --- DEĞİŞMEZLER ---
+        // Sunucu adresini tek bir yerden yönetmek en iyisidir
+        serverUrl: 'http://129.154.239.84:3000',
 
         // --- METHODS (Fonksiyonlar) ---
 
@@ -24,7 +28,7 @@ function loremistressApp() {
                 this.error = '';
                 this.transcript = '';
                 this.shots = [];
-                this.videoLink = ''; // Reset video link on new file selection
+                this.videoLink = '';
             } else {
                 this.error = 'Lütfen geçerli bir ses dosyası seçin.';
             }
@@ -54,7 +58,8 @@ function loremistressApp() {
             formData.append('projectName', this.projectName.trim());
 
             try {
-                const response = await fetch('http://localhost:3000/process-audio', {
+                // DÜZELTİLDİ: Sunucu IP'si kullanılıyor
+                const response = await fetch(`${this.serverUrl}/process-audio`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -84,7 +89,8 @@ function loremistressApp() {
                 const styleSignature = " in the style of a dark, gritty graphic novel, with heavy inks and high contrast.";
                 const finalPrompt = "Epic grimdark digital painting, " + shot.scene_description + styleSignature;
                 
-const response = await fetch('http://129.154.239.84:3000/process-audio', { ... });
+                // DÜZELTİLDİ: fetch komutu tamamen düzeltildi
+                const response = await fetch(`${this.serverUrl}/generate-image`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -109,7 +115,6 @@ const response = await fetch('http://129.154.239.84:3000/process-audio', { ... }
             }
         },
 
-        // ++ NEWLY ADDED FUNCTION FOR FFmpeg ++
         async createVideo() {
             if (!this.projectName.trim() || !this.selectedFile) {
                 this.error = "Video oluşturmak için bir proje ve yüklenmiş bir ses dosyası olmalı.";
@@ -121,7 +126,8 @@ const response = await fetch('http://129.154.239.84:3000/process-audio', { ... }
 
             try {
                 const originalExtension = this.selectedFile.name.substring(this.selectedFile.name.lastIndexOf('.'));
-                const response = await fetch('http://localhost:3000/create-video', {
+                // DÜZELTİLDİ: Sunucu IP'si kullanılıyor
+                const response = await fetch(`${this.serverUrl}/create-video`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -136,10 +142,11 @@ const response = await fetch('http://129.154.239.84:3000/process-audio', { ... }
                 }
 
                 const data = await response.json();
-                alert('Video başarıyla oluşturuldu! Downloads klasörünüzü kontrol edin.');
+                alert('Video başarıyla oluşturuldu! Sunucudaki downloads klasörünü kontrol edin.');
                 
                 const safeProjectName = this.projectName.trim().replace(/[^a-z0-9\s_-]/gi, '').trim().replace(/[\s_]+/g, '-');
-                this.videoLink = `http://localhost:3000/downloads/${safeProjectName}/${data.videoFile}`;
+                // DÜZELTİLDİ: Video linki sunucu IP'sini içeriyor
+                this.videoLink = `${this.serverUrl}/downloads/${safeProjectName}/${data.videoFile}`;
 
             } catch (err) {
                 this.error = `Video oluşturma hatası: ${err.message}`;
