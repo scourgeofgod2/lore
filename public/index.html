@@ -8,6 +8,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body class="bg-slate-900 text-slate-300 font-inter antialiased">
 
     <div class="aurora"></div>
@@ -70,7 +71,7 @@
                                         <svg x-show="!shot.imageUrl && !shot.isGenerating" class="w-10 h-10 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z" /></svg>
                                     </div>
                                     <div class="p-5 flex flex-col flex-grow">
-                                        <p class="text-xs font-mono text-sky-400" x-text="`[${shot.timestamp}]`"></p>
+                                        <p class="text-xs font-mono text-sky-400" x-text="shot.timestamp"></p>
                                         <p class="text-slate-400 text-sm mt-2 mb-4 flex-grow" x-text="shot.scene_description"></p>
                                         <button @click="generateImage(shot, index)" :disabled="shot.isGenerating" class="w-full mt-auto bg-slate-700 text-slate-300 font-semibold text-sm py-2 px-4 rounded-md transition-colors hover:bg-sky-500 hover:text-white disabled:bg-slate-800 disabled:text-slate-500 flex items-center justify-center gap-2">
                                             <svg x-show="shot.isGenerating" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -84,17 +85,30 @@
                 </div>
 
             </div>
+            
+            <!-- +++ YENİ EKLENEN/GÜNCELLENEN BÖLÜM BURASI +++ -->
             <footer x-show="shots.length > 0 && !isLoading" class="mt-10 pt-6 border-t border-slate-700/50">
-    <h3 class="text-xl font-bold text-slate-200 mb-4 text-center">Prodüksiyon</h3>
-    <button @click="createVideo" :disabled="isCreatingVideo" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-all duration-300 hover:bg-purple-500 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-3">
-        <svg x-show="isCreatingVideo" class="animate-spin h-5 w-5" xmlns="[http://www.w.org/2000/svg](http://www.w.org/2000/svg)" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-        <span x-text="isCreatingVideo ? 'Video Oluşturuluyor...' : 'Tüm Görsellerden Video Oluştur'"></span>
-    </button>
-    <div x-show="videoUrl" class="mt-4 text-center">
-        <p class="text-green-400 mb-2">Videonuz Hazır!</p>
-        <a :href="videoUrl" target="_blank" class="text-sky-400 hover:underline" x-text="videoUrl"></a>
-    </div>
-</footer>
+                <h3 class="text-xl font-bold text-slate-200 mb-4 text-center">Prodüksiyon</h3>
+                
+                <button @click="createVideo" :disabled="isCreatingVideo" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-all duration-300 hover:bg-purple-500 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-3">
+                    <svg x-show="isCreatingVideo" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span x-text="isCreatingVideo ? 'Video Oluşturuluyor...' : 'Tüm Görsellerden Video Oluştur'"></span>
+                </button>
+
+                <!-- Sadece videoLink oluştuğunda görünecek olan indirme butonu -->
+                <div x-show="videoLink" class="mt-4 text-center" x-transition>
+                    <p class="text-green-400 mb-3">Videonuz Hazır!</p>
+                    <a :href="videoLink" download
+                       class="inline-flex items-center justify-center gap-2 bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 hover:bg-green-500 shadow-lg shadow-green-500/20">
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        <span>Videoyu İndir</span>
+                    </a>
+                </div>
+            </footer>
+            <!-- +++ BÖLÜM SONU +++ -->
+
         </main>
     </div>
     
