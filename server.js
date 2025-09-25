@@ -69,7 +69,7 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
         const lastShot = rawShots[rawShots.length - 1];
         
         // HATA 1 BURADAYDI VE DÜZELTİLDİ: .split('-') bir dizi döndürür, önce elemanı seçmek gerekir.
-        const lastTimestamp = lastShot.timestamp.split('-').replace(']', '');
+const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
         
         const [minutes, seconds] = lastTimestamp.split(':').map(Number);
         const totalDurationInSeconds = minutes * 60 + seconds;
