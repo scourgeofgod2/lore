@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process'); // This line must correctly import 'exec'
+const { exec } = require('child_process');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const textModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -16,7 +16,7 @@ const textModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 const app = express();
 const port = 3000;
 app.use(express.json());
-const corsOptions = { origin: 'http://127.0.0.1:5500' }; // Live Server portunuza göre ayarlayın
+const corsOptions = { origin: 'http://127.0.0.1:5500' };
 app.use(cors(corsOptions));
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -25,8 +25,17 @@ if (!fs.existsSync(mainDownloadsDir)){
     fs.mkdirSync(mainDownloadsDir);
 }
 
+// +++ EKLENDİ: 'downloads' klasörünü dışarıya açarak video linklerinin çalışmasını sağlar. +++
+app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
+
+
 // Güvenli dosya adı için bir fonksiyon
 const sanitizeFilename = (name) => name.replace(/[^a-z0-9\s_-]/gi, '').trim().replace(/[\s_]+/g, '-');
+
+// --- Diğer tüm app.post(...) fonksiyonları AYNEN KALIYOR ---
+// ...
+// (Burada kodunun geri kalanı değişmeden devam ediyor)
+// ...
 
 app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
     const { projectName } = req.body;
@@ -80,7 +89,7 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
 
         // Toplam süreyi son timestamp'ten al
         const lastShot = rawShots[rawShots.length - 1];
-        const lastTimestamp = lastShot.timestamp.split('-')[1].replace(']', '');
+        const lastTimestamp = lastShot.timestamp.split('-').replace(']', '');
         const [minutes, seconds] = lastTimestamp.split(':').map(Number);
         const totalDurationInSeconds = minutes * 60 + seconds;
         
@@ -112,8 +121,8 @@ app.post('/process-audio', upload.single('audioFile'), async (req, res) => {
             }
 
             if (shortestIndex === 0) { // Eğer en kısa olan ilk sahneyse, sonrakiyle birleştir
-                mergedShots[1].start = mergedShots[0].start;
-                mergedShots[1].scene_description = mergedShots[0].scene_description + " " + mergedShots[1].scene_description;
+                mergedShots.start = mergedShots.start;
+                mergedShots.scene_description = mergedShots.scene_description + " " + mergedShots.scene_description;
                 mergedShots.splice(0, 1);
             } else { // Değilse, bir öncekiyle birleştir
                 mergedShots[shortestIndex - 1].end = mergedShots[shortestIndex].end;
@@ -191,7 +200,7 @@ app.post('/generate-image', async (req, res) => {
         }
 
         const responseData = await apiResponse.json();
-        const imageUrl = responseData.data[0].imageURL;
+        const imageUrl = responseData.data.imageURL;
 
         if (!imageUrl) throw new Error("Runware API cevabında 'imageURL' alanı bulunamadı.");
         console.log('Görsel başarıyla üretildi. URL:', imageUrl);
@@ -252,7 +261,7 @@ app.post('/create-video', (req, res) => {
             const timeMatch = file.match(/\[(\d{4}_\d{4})\]/);
             if (!timeMatch) return;
 
-            const [startStr, endStr] = timeMatch[1].split('_');
+            const [startStr, endStr] = timeMatch.split('_');
             const start = parseInt(startStr.substring(0, 2)) * 60 + parseInt(startStr.substring(2, 4));
             const end = parseInt(endStr.substring(0, 2)) * 60 + parseInt(endStr.substring(2, 4));
             const duration = end - start;
@@ -297,6 +306,8 @@ app.post('/create-video', (req, res) => {
         res.status(500).json({ error: "Video oluşturma sırasında bir hata oluştu: " + error.message });
     }
 });
+
+// --- DEĞİŞTİRİLDİ: Konsol mesajı daha anlaşılır hale getirildi. ---
 app.listen(port, () => {
-    console.log(`Loremistress Kurgu Asistanı sunucusu http://localhost:${port} adresinde çalışıyor`);
+    console.log(`Loremistress Kurgu Asistanı sunucusu ${port} portunda çalışıyor.`);
 });
